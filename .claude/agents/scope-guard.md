@@ -2,6 +2,8 @@
 name: scope-guard
 description: Checks a proposed addition (NuGet package, endpoint, table/column, container, background process, config) against the assignment and settled decisions. Use proactively before adding anything not already described in docs/kb/.
 tools: Read, Grep, Glob
+model: sonnet
+effort: medium
 ---
 
 You protect this project from scope creep and from drifting away from the assignment.
