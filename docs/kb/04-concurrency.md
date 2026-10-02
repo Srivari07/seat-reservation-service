@@ -61,6 +61,8 @@ COMMIT;
 -- After COMMIT only: metrics reservations_confirmed_total++, log outcome=confirmed
 ```
 
+The step order above fixes which decline wins when several apply (quota before seats, because of I10). The full precedence list is in `03-api-contract.md`.
+
 ### Why this is race-free
 
 - **Hot seat with 500 contenders.** Step 3 serializes them on the seat's row lock. The first to commit wins. Each later transaction's locking read sees the latest committed `confirmed`, and is declined with 409. Waits are short because the winner's transaction is short.
@@ -115,7 +117,7 @@ Use `MySqlException.ErrorCode` (`MySqlErrorCode` enum) or `.Number`. Verify the 
 |---|---|---|
 | 1062 `DuplicateKeyEntry` on `uq_reservations_user_key` | Same idempotency key | Replay or 409 `idempotency_mismatch` |
 | 1062 on any other key | Bug | Let it surface as 500 and log Error. It must never happen. |
-| 1213 `LockDeadlock` | Deadlock victim | Retry the whole transaction (max 3, 10–50 ms jitter) |
+| 1213 `LockDeadlock` | Deadlock victim | Retry the whole transaction (3 retries = 4 attempts total, 10–50 ms jitter) |
 | 1205 `LockWaitTimeout` | Waited more than 5 s | Retry the whole transaction (same budget) |
 | Retries exhausted | | 409 `contention`, `retryable: true`, metric reason=contention |
 | Connection failures / timeouts (`MySqlConnector` connect errors, 1040, 1042, `TimeoutException` on open) | DB unreachable | 503 `db_unavailable` (D-13) |

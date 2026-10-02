@@ -38,7 +38,7 @@ Goal: a clean clone runs with `docker compose up --build`, and the live URL surv
 3. Set the `MigrationsCompleted` flag. Readiness turns 200 once `SELECT 1` also passes.
 4. Never crash-loop because the DB is slow to wake. Free-tier DBs often sleep.
 
-## Hosting checklist (choose, then record the choice as D-17 in `01-decisions.md`)
+## Hosting checklist (choose, then record the choice as D-18 in `01-decisions.md`)
 
 - [ ] The app host runs a Docker image from the repo (Render / Railway / Fly.io or similar free tier).
 - [ ] The managed MySQL is **real MySQL/InnoDB** (not a MySQL-compatible distributed engine). Check its free-tier connection limit and set the pool size below it.

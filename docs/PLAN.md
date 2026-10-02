@@ -9,7 +9,7 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 0 — Repo bootstrap
 **KB:** AGENTS.md
-- [ ] Create `.gitignore` (dotnet + .env), `.editorconfig`, `README.md` stub, `.env.example`, and the solution `SeatReservation.sln`. Commit these docs first.
+- [ ] Fill the existing `.gitignore` (dotnet + .env; local notes are already listed), add `.editorconfig`, fill the existing `README.md` stub, add `.env.example`, `global.json` (sdk 10.0.201, `rollForward: latestFeature`) and the solution file. Check whether SDK 10 creates `.slnx` or `.sln` and use what it creates. The docs are already committed.
   - **Accept:** `git log` shows the docs commit; `dotnet build` succeeds on the empty solution.
   - **Commit:** `chore: bootstrap repo with agent instructions and knowledge base`
 
@@ -82,7 +82,7 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 9 — Deploy
 **KB:** 07-deploy
-- [ ] Pick the host and MySQL provider. Record the choice as D-17. Set env vars and the health check path.
+- [ ] Pick the host and MySQL provider. Record the choice as D-18. Set env vars and the health check path.
 - [ ] Deploy, run the cold-start test, then `./burst.sh <LIVE_URL>`. Save the output.
 - [ ] Set up log access (public view or screen recording).
   - **Commit:** `chore: deployment config for <platform>` (plus any fixes as separate `fix:` commits)

@@ -65,7 +65,9 @@
 
 ## POST /shows/{id}/reserve — authenticated user
 
-The idempotency key can come from the body field `idempotency_key` or the header `Idempotency-Key` (1–128 chars). If both are present and differ, the response is 400 `idempotency_key_conflict`.
+The idempotency key can come from the body field `idempotency_key` or the header `Idempotency-Key`. It must be 1–128 printable ASCII characters (0x21–0x7E); anything else is 400 `invalid_request` (the column is `ascii`, D-17). If both are present and differ, the response is 400 `idempotency_key_conflict`.
+
+A `{id}` that is not a valid GUID returns 404 `show_not_found`, the same as an unknown id (also for `GET /shows/{id}`).
 
 **Request**
 ```json
@@ -77,7 +79,7 @@ Any `user_id` field in the body is ignored; identity comes from the JWT `sub` cl
 ```json
 { "reservation_id": "…", "show_id": "…", "user_id": "u-123", "seats": ["A12"], "amount_paise": 25000, "status": "confirmed" }
 ```
-A replay also sets the header `Idempotent-Replayed: true`. If the original reservation was cancelled since, the replay returns it with `status: "cancelled"`. The `seats` list is returned sorted.
+A replay also sets the header `Idempotent-Replayed: true`. If the original reservation was cancelled since, the replay still returns 201, with `status: "cancelled"`. The `seats` list is returned sorted.
 
 **Errors**
 
@@ -93,6 +95,18 @@ A replay also sets the header `Idempotent-Replayed: true`. If the original reser
 | 409 | `idempotency_mismatch` | Same key, different show/seats |
 | 409 | `contention` | Retries exhausted (D-12). Extra field: `"retryable": true` |
 | 503 | `db_unavailable` | MySQL unreachable (fail closed) |
+
+**Check precedence** (first failing check wins, D-17). Order follows the transaction steps in `04-concurrency.md`:
+1. 400 `invalid_request` (body, seats, key format)
+2. 400 `idempotency_key_conflict`
+3. 404 `show_not_found`
+4. 409 `per_user_limit` (early: more seats requested than the limit)
+5. 201 replay / 409 `idempotency_mismatch`
+6. 409 `per_user_limit` (quota)
+7. 400 `unknown_seat`
+8. 409 `seat_taken`
+
+So a user already at their limit who asks for an unknown or taken seat gets `per_user_limit`.
 
 ---
 

@@ -102,3 +102,15 @@ Each decision records what we chose, why, and what we rejected. Add new entries 
 - Separate SeatHold, Reservation and Seat statuses → the seat row is the single source of truth for seat state.
 - `/api/v1/...` paths → exact assignment paths.
 - Payment Gateway, API Gateway, microservices → removed (D-01, D-02).
+
+### D-17 KB clarifications (pre-Phase 0 review)
+Ambiguities found while reviewing the KB against the assignment, and how each was settled:
+- **Replay status (D-08):** stays 201 plus `Idempotent-Replayed: true`, including when the original reservation is now cancelled. A winner's retry therefore produces a second 201 for that seat; the burst tool must count replays separately.
+- **Seat lock access path (I10):** rely on the optimizer using `uq_seats_show_seat` for `WHERE show_id = ? AND seat_no IN (...)`. No `FORCE INDEX`.
+- **Cancel rows-affected ≠ n:** stays ROLLBACK, an Error log `invariant_violation`, and 409 `contention`, as in `04-concurrency.md`.
+- **Idempotency key format:** 1–128 printable ASCII characters (0x21–0x7E), otherwise 400 `invalid_request`. This prevents MySQL 1366 on the `ascii` column, which would be a 500.
+- **Retry budget (D-12):** 3 retries, i.e. 4 attempts in total.
+- **Check precedence on reserve:** follows the transaction step order (listed in `03-api-contract.md`).
+- **Malformed show id:** 404 `show_not_found`, the same as cancel's rule.
+- **Accepted risk:** `price_paise` has no upper bound, so `checked(n * price_paise)` can throw (a 500) if the product exceeds `long.MaxValue` (~9.2e18). This is considered unrealistic and is left unguarded.
+- **Local notes** (HANDOFF.md, the HLD png, the assignment .txt, my-understanding.txt) are gitignored, not committed.
