@@ -7,7 +7,7 @@ This is the heart of the assignment. Every rule here maps to an invariant in `AG
 - Every write transaction:
   - `await conn.BeginTransactionAsync(IsolationLevel.ReadCommitted)` (D-06)
   - First statement: `SET SESSION innodb_lock_wait_timeout = 5`. This must be per transaction, because MySqlConnector resets session state when a pooled connection is reused.
-  - Runs inside `RetryHelper.ExecuteAsync(...)`, which re-runs the **whole** transaction on 1213/1205 (D-12).
+  - Runs inside `DbRunner.WriteAsync(...)` (`Infrastructure/Db/DbRunner.cs`), which re-runs the **whole** transaction on 1213/1205 (D-12).
 - No HTTP calls, no logging I/O waits and no non-DB awaits inside a transaction. Keep transactions short.
 - Global lock order (I10): **reservation row → `user_show_quota` row → seats by `(show_id, seat_no)`**.
 
@@ -121,6 +121,7 @@ Use `MySqlException.ErrorCode` (`MySqlErrorCode` enum) or `.Number`. Verify the 
 | 1205 `LockWaitTimeout` | Waited more than 5 s | Retry the whole transaction (same budget) |
 | Retries exhausted | | 409 `contention`, `retryable: true`, metric reason=contention |
 | Connection failures / timeouts (`MySqlConnector` connect errors, 1040, 1042, `TimeoutException` on open) | DB unreachable | 503 `db_unavailable` (D-13) |
+| Connection lost mid-transaction (the connection's state becomes `Broken`) | DB unreachable | 503 `db_unavailable`, **not retried**: if it broke during COMMIT the outcome is unknown, and the client's retry with the same idempotency key resolves it |
 | Anything else | Bug | 500 plus an Error log with request_id. The burst must show 0 of these. |
 
 ## Throughput (D-14)

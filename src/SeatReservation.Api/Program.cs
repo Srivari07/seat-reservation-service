@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using SeatReservation.Api.Auth;
 using SeatReservation.Api.Health;
+using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
 using SeatReservation.Api.Infrastructure.Logging;
 using SeatReservation.Api.Infrastructure.Migrations;
@@ -49,11 +50,17 @@ try
     builder.Services.AddSingleton<JwtTokenIssuer>();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
+    builder.Services.AddSingleton(sp => DbGate.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
+    // Singleton: it builds its connection string (MySqlConnectionStringBuilder parsing) once,
+    // instead of on every request.
+    builder.Services.AddSingleton(sp => new DbRunner(
+        sp.GetRequiredService<IConfiguration>().GetConnectionString("Mysql"),
+        sp.GetRequiredService<DbGate>(),
+        sp.GetRequiredService<ILogger<DbRunner>>()));
+
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ShowMetadataCache>();
-    // No scoped dependencies (IConfiguration and ShowMetadataCache are both singletons already),
-    // so this is a singleton too - lets it cache its connection string once instead of
-    // rebuilding it (MySqlConnectionStringBuilder parsing) on every request.
+    // No scoped dependencies (DbRunner and ShowMetadataCache are both singletons already).
     builder.Services.AddSingleton<ShowService>();
 
     builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -130,6 +137,11 @@ try
     {
         throw new InvalidOperationException("JWT_SIGNING_KEY must be valid base64.", ex);
     }
+
+    // Resolved eagerly so an invalid DB_MAX_CONCURRENCY, a missing connection string, or a gate
+    // larger than the pool refuses to start, instead of failing the first request that touches
+    // the DB.
+    app.Services.GetRequiredService<DbRunner>();
 
     app.UseMiddleware<RequestIdMiddleware>();
     app.UseSerilogRequestLogging();

@@ -47,7 +47,7 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 5 — Reserve (the core) ⚠️
 **KB:** 04-concurrency, 03-api-contract, 01-decisions (D-04, D-07, D-08, D-09, D-12)
-- [ ] DB infrastructure: transaction helper (ReadCommitted plus lock timeout), retry helper (1213/1205), MySQL error → domain outcome mapping, and the `SemaphoreSlim` DB gate.
+- [x] DB infrastructure: transaction helper (ReadCommitted plus lock timeout), retry helper (1213/1205), MySQL error → domain outcome mapping, and the `SemaphoreSlim` DB gate. Built as `Infrastructure/Db/DbRunner` (`WriteAsync`/`ReadAsync`) + `DbGate` + `TxResult` + `MySqlErrors`; `ShowService` moved onto it. Proven against real MySQL in `Db/DbRunnerTests` (real deadlock retried, lock-wait exhaustion → 409 `contention` with no leaked work, mid-transaction connection loss → 503, nested-call guard, gate ≤ pool size enforced at startup).
 - [ ] Reserve service, implementing the transaction exactly as specified. Idempotency replay/mismatch path. Error bodies with reasons.
 - [ ] Integration tests:
   - C1 hot seat, 500 parallel requests

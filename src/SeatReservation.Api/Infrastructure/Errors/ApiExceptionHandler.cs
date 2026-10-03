@@ -24,6 +24,16 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
                 logger.LogWarning(exception, "Database unreachable; returning 503.");
                 result = ApiError.Write(httpContext, StatusCodes.Status503ServiceUnavailable, "db_unavailable", "The service is not ready yet.");
                 break;
+            case DbContentionException:
+                // D-12: a domain decline, not a 5xx. Logged here for the same reason as above.
+                logger.LogWarning(exception, "Database contention after all retries; returning 409.");
+                result = ApiError.Write(
+                    httpContext,
+                    StatusCodes.Status409Conflict,
+                    "contention",
+                    "The request could not be completed because of contention. Retry it.",
+                    new Dictionary<string, object?> { ["retryable"] = true });
+                break;
             default:
                 return false;
         }

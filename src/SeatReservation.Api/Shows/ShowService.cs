@@ -1,23 +1,15 @@
-using System.Data;
 using System.Text.RegularExpressions;
 using Dapper;
-using MySqlConnector;
 using SeatReservation.Api.Infrastructure.Db;
-using SeatReservation.Api.Infrastructure.Errors;
 
 namespace SeatReservation.Api.Shows;
 
-public sealed partial class ShowService(IConfiguration configuration, ShowMetadataCache metadataCache)
+public sealed partial class ShowService(DbRunner db, ShowMetadataCache metadataCache)
 {
     private const int DefaultPerUserLimit = 4;
     private const int MaxNameLength = 200;
     private const int MaxSeats = 10_000;
     private const int SeatInsertBatchSize = 500;
-
-    // Computed once, not per call: ShowService is a singleton (no scoped dependencies), so
-    // there's no need to re-parse the connection string (MySqlConnectionStringBuilder) on
-    // every request.
-    private readonly string _connectionString = MySqlConnectionStrings.WithGuidFormat(configuration.GetConnectionString("Mysql"));
 
     public async Task<(bool Success, string? ErrorMessage, ShowResponse? Show)> CreateShowAsync(
         CreateShowRequest request, CancellationToken cancellationToken)
@@ -28,46 +20,40 @@ public sealed partial class ShowService(IConfiguration configuration, ShowMetada
             return (false, error, null);
         }
 
+        // Generated once, outside the transaction: a retried attempt re-inserts the same id
+        // (the failed attempt was rolled back, so it never collides with itself).
         var showId = Guid.CreateVersion7();
 
-        await using var connection = new MySqlConnection(_connectionString);
-        await OpenAsync(connection, cancellationToken);
-
-        // The request token is only honored up to here: once the transaction starts, a client
-        // abort must not leave it half-committed - the statements and the commit always run
-        // to completion (or roll back together), never partway through on cancellation.
-        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-
-        await connection.ExecuteAsync(
-            "SET SESSION innodb_lock_wait_timeout = 5",
-            transaction: transaction);
-
-        await connection.ExecuteAsync(
-            """
-            INSERT INTO shows (show_id, name, price_paise, per_user_limit, total_seats)
-            VALUES (@ShowId, @Name, @PricePaise, @PerUserLimit, @TotalSeats)
-            """,
-            new { ShowId = showId, Name = name, PricePaise = pricePaise, PerUserLimit = perUserLimit, TotalSeats = seats.Count },
-            transaction);
-
-        // Multi-row INSERT in batches of ~500 (02-schema.md), rather than one row per
-        // round trip - total_seats can be up to 10,000. Seats are pre-sorted by Validate,
-        // so seat_id (auto-increment) order matches (show_id, seat_no) order.
-        foreach (var batch in seats.Chunk(SeatInsertBatchSize))
+        await db.WriteAsync(async (connection, transaction) =>
         {
-            var parameters = new DynamicParameters();
-            parameters.Add("ShowId", showId);
-            var valuesSql = string.Join(',', Enumerable.Range(0, batch.Length).Select(i =>
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO shows (show_id, name, price_paise, per_user_limit, total_seats)
+                VALUES (@ShowId, @Name, @PricePaise, @PerUserLimit, @TotalSeats)
+                """,
+                new { ShowId = showId, Name = name, PricePaise = pricePaise, PerUserLimit = perUserLimit, TotalSeats = seats.Count },
+                transaction);
+
+            // Multi-row INSERT in batches of ~500 (02-schema.md), rather than one row per
+            // round trip - total_seats can be up to 10,000. Seats are pre-sorted by Validate,
+            // so seat_id (auto-increment) order matches (show_id, seat_no) order.
+            foreach (var batch in seats.Chunk(SeatInsertBatchSize))
             {
-                parameters.Add($"s{i}", batch[i]);
-                return $"(@ShowId, @s{i})";
-            }));
+                var parameters = new DynamicParameters();
+                parameters.Add("ShowId", showId);
+                var valuesSql = string.Join(',', Enumerable.Range(0, batch.Length).Select(i =>
+                {
+                    parameters.Add($"s{i}", batch[i]);
+                    return $"(@ShowId, @s{i})";
+                }));
 
-            await connection.ExecuteAsync($"INSERT INTO seats (show_id, seat_no) VALUES {valuesSql}", parameters, transaction);
-        }
+                await connection.ExecuteAsync($"INSERT INTO seats (show_id, seat_no) VALUES {valuesSql}", parameters, transaction);
+            }
 
-        await transaction.CommitAsync(CancellationToken.None);
+            return TxResult.Commit(showId);
+        }, cancellationToken);
 
+        // Only after the commit, so the cache never holds a show that doesn't exist.
         metadataCache.Set(showId, new ShowMetadata(pricePaise, perUserLimit));
 
         var seatDtos = seats.Select(seat => new SeatDto(seat, "available")).ToList();
@@ -86,24 +72,24 @@ public sealed partial class ShowService(IConfiguration configuration, ShowMetada
 
     public async Task<ShowResponse?> GetShowAsync(Guid showId, CancellationToken cancellationToken)
     {
-        await using var connection = new MySqlConnection(_connectionString);
-        await OpenAsync(connection, cancellationToken);
+        var rowList = await db.ReadAsync(async connection =>
+        {
+            var rows = await connection.QueryAsync<ShowSeatRow>(
+                new CommandDefinition(
+                    """
+                    SELECT sh.show_id AS ShowId, sh.name AS Name, sh.price_paise AS PricePaise,
+                           sh.per_user_limit AS PerUserLimit, sh.total_seats AS TotalSeats,
+                           se.seat_no AS SeatNo, se.status AS Status
+                    FROM shows sh
+                    JOIN seats se ON se.show_id = sh.show_id
+                    WHERE sh.show_id = @ShowId
+                    ORDER BY se.seat_no
+                    """,
+                    new { ShowId = showId },
+                    cancellationToken: cancellationToken));
+            return rows.AsList();
+        }, cancellationToken);
 
-        var rows = await connection.QueryAsync<ShowSeatRow>(
-            new CommandDefinition(
-                """
-                SELECT sh.show_id AS ShowId, sh.name AS Name, sh.price_paise AS PricePaise,
-                       sh.per_user_limit AS PerUserLimit, sh.total_seats AS TotalSeats,
-                       se.seat_no AS SeatNo, se.status AS Status
-                FROM shows sh
-                JOIN seats se ON se.show_id = sh.show_id
-                WHERE sh.show_id = @ShowId
-                ORDER BY se.seat_no
-                """,
-                new { ShowId = showId },
-                cancellationToken: cancellationToken));
-
-        var rowList = rows.AsList();
         if (rowList.Count == 0)
         {
             return null;
@@ -133,18 +119,6 @@ public sealed partial class ShowService(IConfiguration configuration, ShowMetada
             first.TotalSeats,
             new ShowCounts(available, held, confirmed),
             seats);
-    }
-
-    private static async Task OpenAsync(MySqlConnection connection, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-        catch (MySqlException ex)
-        {
-            throw new DbUnavailableException(ex);
-        }
     }
 
     private static string? Validate(
