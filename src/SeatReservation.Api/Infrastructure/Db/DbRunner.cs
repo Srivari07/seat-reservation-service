@@ -2,6 +2,7 @@ using System.Data;
 using Dapper;
 using MySqlConnector;
 using SeatReservation.Api.Infrastructure.Errors;
+using SeatReservation.Api.Infrastructure.Metrics;
 
 namespace SeatReservation.Api.Infrastructure.Db;
 
@@ -16,6 +17,7 @@ public sealed class DbRunner
     private readonly string _connectionString;
     private readonly DbGate _gate;
     private readonly ILogger<DbRunner> _logger;
+    private readonly AppMetrics _metrics;
     private readonly int _lockWaitTimeoutSeconds;
 
     // True while this async flow holds a gate slot. A callback that calls back into DbRunner would
@@ -25,7 +27,7 @@ public sealed class DbRunner
 
     // lockWaitTimeoutSeconds is always 5 in the app; only tests shorten it, so a test that waits
     // out every attempt takes ~4 s instead of ~20 s.
-    public DbRunner(string? connectionString, DbGate gate, ILogger<DbRunner> logger, int lockWaitTimeoutSeconds = 5)
+    public DbRunner(string? connectionString, DbGate gate, ILogger<DbRunner> logger, AppMetrics metrics, int lockWaitTimeoutSeconds = 5)
     {
         _connectionString = MySqlConnectionStrings.WithGuidFormat(connectionString);
 
@@ -40,6 +42,7 @@ public sealed class DbRunner
 
         _gate = gate;
         _logger = logger;
+        _metrics = metrics;
         _lockWaitTimeoutSeconds = lockWaitTimeoutSeconds;
     }
 
@@ -97,6 +100,9 @@ public sealed class DbRunner
                 }
                 catch (MySqlException ex) when (MySqlErrors.IsDeadlock(ex) || MySqlErrors.IsLockWaitTimeout(ex))
                 {
+                    var errorLabel = MySqlErrors.IsDeadlock(ex) ? "deadlock" : "lock_wait_timeout";
+                    _metrics.DbTxRetriesTotal.WithLabels(errorLabel).Inc();
+
                     // The failed transaction is already disposed (rolled back) by the time we get
                     // here, so this log line and the delay hold no locks.
                     if (attempt == MaxAttempts)
@@ -107,7 +113,7 @@ public sealed class DbRunner
                     _logger.LogWarning(
                         "DB transaction attempt {Attempt} failed with {DbError}; retrying.",
                         attempt,
-                        MySqlErrors.IsDeadlock(ex) ? "deadlock" : "lock_wait_timeout");
+                        errorLabel);
                     await Task.Delay(Random.Shared.Next(10, 51), cancellationToken);
                 }
             }

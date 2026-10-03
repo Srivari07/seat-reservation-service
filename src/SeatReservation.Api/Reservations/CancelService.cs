@@ -4,13 +4,14 @@ using Dapper;
 using MySqlConnector;
 using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
+using SeatReservation.Api.Infrastructure.Metrics;
 
 namespace SeatReservation.Api.Reservations;
 
 // POST /reservations/{id}/cancel. The transaction is the cancel transaction in 04-concurrency.md,
 // step for step, in the same global lock order as reserve (I10). Only the owner can cancel (I6),
 // and only seats still owned by this reservation are freed (I8).
-public sealed class CancelService(DbRunner db, ILogger<CancelService> logger)
+public sealed class CancelService(DbRunner db, AppMetrics metrics, ILogger<CancelService> logger)
 {
     private const int MaxLoggedIdLength = 64;
 
@@ -23,6 +24,14 @@ public sealed class CancelService(DbRunner db, ILogger<CancelService> logger)
         {
             var outcome = await DecideAsync(reservationIdRaw, userId, trace, cancellationToken);
             LogOutcome(outcome, loggedId, userId, trace);
+            // Cancel visibility (05-observability.md); only the first-time cancel, after commit -
+            // AlreadyCancelled changed nothing. Cancel-side contention isn't separately metered here:
+            // db_tx_retries_total already covers contention visibility across both endpoints.
+            if (outcome is CancelOutcome.Cancelled cancelled)
+            {
+                metrics.ReservationsCancelledTotal.WithLabels(cancelled.Reservation.ShowId).Inc();
+            }
+
             return outcome;
         }
         catch (DbContentionException)

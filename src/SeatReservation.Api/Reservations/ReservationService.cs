@@ -7,6 +7,7 @@ using Microsoft.Extensions.Primitives;
 using MySqlConnector;
 using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
+using SeatReservation.Api.Infrastructure.Metrics;
 using SeatReservation.Api.Shows;
 
 namespace SeatReservation.Api.Reservations;
@@ -14,7 +15,8 @@ namespace SeatReservation.Api.Reservations;
 // POST /shows/{id}/reserve. Checks run in the precedence order of 03-api-contract.md; the
 // transaction is the one in 04-concurrency.md, step for step. Every decision about seats, quota
 // and idempotency is made by MySQL inside that transaction (I9), never by a read in C#.
-public sealed class ReservationService(DbRunner db, ShowMetadataCache metadataCache, ILogger<ReservationService> logger)
+public sealed class ReservationService(
+    DbRunner db, ShowMetadataCache metadataCache, AppMetrics metrics, ILogger<ReservationService> logger)
 {
     private const int MaxKeyLength = 128;
     private const string IdempotencyKeyIndex = "uq_reservations_user_key";
@@ -27,6 +29,7 @@ public sealed class ReservationService(DbRunner db, ShowMetadataCache metadataCa
         {
             var outcome = await DecideAsync(showIdRaw, userId, request, headerKeys, trace, cancellationToken);
             LogOutcome(outcome, showIdRaw, userId, trace);
+            RecordMetrics(outcome, CanonicalShowId(showIdRaw));
             return outcome;
         }
         catch (DbContentionException)
@@ -36,9 +39,23 @@ public sealed class ReservationService(DbRunner db, ShowMetadataCache metadataCa
             logger.LogWarning(
                 DecisionLogTemplate,
                 "declined", "contention", showIdRaw, userId, null, trace.Seats, trace.Attempts, trace.ElapsedMs);
+            if (CanonicalShowId(showIdRaw) is { } metricShowId)
+            {
+                metrics.ReservationsDeclinedTotal.WithLabels(metricShowId, "contention").Inc();
+            }
+
             throw;
         }
     }
+
+    // Guid.TryParse also accepts upper-case, "N", "B" and "P" forms (see Guid.TryParse docs); a
+    // metric labelled with the raw route string would split one show's series across every format
+    // a caller happens to send, and - since tokens are free (D-10) - let anyone grow the label set
+    // without bound. Every metered outcome below only happens once the show id has already parsed
+    // (contention and the decline reasons in IsMeteredReason all occur after LoadShowAsync
+    // succeeded), so this always resolves except for outcomes RecordMetrics doesn't meter anyway.
+    private static string? CanonicalShowId(string showIdRaw) =>
+        Guid.TryParse(showIdRaw, out var showId) ? showId.ToString() : null;
 
     private async Task<ReserveOutcome> DecideAsync(
         string showIdRaw, string userId, ReserveRequest request, StringValues headerKeys, ReserveTrace trace,
@@ -374,6 +391,35 @@ public sealed class ReservationService(DbRunner db, ShowMetadataCache metadataCa
         logger.LogInformation(
             DecisionLogTemplate, name, reason, showId, userId, reservationId, trace.Seats, trace.Attempts, trace.ElapsedMs);
     }
+
+    // 05-observability.md's label list for reservations_declined_total covers only these reasons
+    // (reservation-decision outcomes); invalid_request/idempotency_key_conflict/show_not_found are
+    // plain input/routing errors and are deliberately not metered here. Called after WriteAsync has
+    // already committed or rolled back - counters move only after the outcome is decided.
+    private void RecordMetrics(ReserveOutcome outcome, string? showId)
+    {
+        if (showId is null)
+        {
+            return;
+        }
+
+        switch (outcome)
+        {
+            case ReserveOutcome.Created:
+                metrics.ReservationsConfirmedTotal.WithLabels(showId).Inc();
+                break;
+            case ReserveOutcome.Replayed:
+                // D-08: a replay is 201 over the wire but counts as a decline for metrics.
+                metrics.ReservationsDeclinedTotal.WithLabels(showId, "idempotent_replay").Inc();
+                break;
+            case ReserveOutcome.Declined declined when IsMeteredReason(declined.Reason):
+                metrics.ReservationsDeclinedTotal.WithLabels(showId, declined.Reason).Inc();
+                break;
+        }
+    }
+
+    private static bool IsMeteredReason(string reason) =>
+        reason is "seat_taken" or "per_user_limit" or "unknown_seat" or "idempotency_mismatch";
 
     // D-08: SHA-256 over the show id and the sorted, normalized seats.
     private static string RequestHash(Guid showId, IReadOnlyList<string> sortedSeats) =>

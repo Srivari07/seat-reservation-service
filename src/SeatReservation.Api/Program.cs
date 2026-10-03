@@ -1,13 +1,17 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using Prometheus;
+using Prometheus.HttpMetrics;
 using SeatReservation.Api.Auth;
 using SeatReservation.Api.Health;
 using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
 using SeatReservation.Api.Infrastructure.Logging;
+using SeatReservation.Api.Infrastructure.Metrics;
 using SeatReservation.Api.Infrastructure.Migrations;
 using SeatReservation.Api.Reservations;
 using SeatReservation.Api.Shows;
@@ -52,12 +56,17 @@ try
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
     builder.Services.AddSingleton(sp => DbGate.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
+    // Own CollectorRegistry per app instance, not Metrics.DefaultRegistry: see AppMetrics for why
+    // (a WebApplicationFactory-based test boots many hosts in one process).
+    builder.Services.AddSingleton<AppMetrics>();
     // Singleton: it builds its connection string (MySqlConnectionStringBuilder parsing) once,
     // instead of on every request.
     builder.Services.AddSingleton(sp => new DbRunner(
         sp.GetRequiredService<IConfiguration>().GetConnectionString("Mysql"),
         sp.GetRequiredService<DbGate>(),
-        sp.GetRequiredService<ILogger<DbRunner>>()));
+        sp.GetRequiredService<ILogger<DbRunner>>(),
+        sp.GetRequiredService<AppMetrics>()));
+    builder.Services.AddSingleton<ShowGaugeCollector>();
 
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ShowMetadataCache>();
@@ -158,8 +167,38 @@ try
     // the DB.
     app.Services.GetRequiredService<DbRunner>();
 
+    var appMetrics = app.Services.GetRequiredService<AppMetrics>();
+    appMetrics.Registry.AddBeforeCollectCallback(app.Services.GetRequiredService<ShowGaugeCollector>().CollectAsync);
+
     app.UseMiddleware<RequestIdMiddleware>();
     app.UseSerilogRequestLogging();
+    // UseExceptionHandler clears the resolved routing endpoint before ApiExceptionHandler runs, so
+    // prometheus-net's default "endpoint" label (read via HttpContext.GetEndpoint()) would come back
+    // "" for every handled error (409 contention, 503 db_unavailable, 400 malformed body) - exactly
+    // the slowest, most contention-heavy requests, leaving per-endpoint latency/error breakdowns
+    // silently missing them. IExceptionHandlerFeature.Endpoint still has the original endpoint, so a
+    // custom label (which suppresses the library's own default for the same name) falls back to it.
+    string EndpointLabel(HttpContext context) =>
+        ((context.Features.Get<IExceptionHandlerFeature>()?.Endpoint ?? context.GetEndpoint()) as RouteEndpoint)
+            ?.RoutePattern.RawText ?? "";
+
+    // Before UseExceptionHandler (wraps it), so it records the final mapped status code (503/409/
+    // ...) rather than a transient unhandled exception. Points at AppMetrics' own registry, not
+    // Metrics.DefaultRegistry - see AppMetrics for why. Restricted to exactly the methods this API
+    // serves (case-sensitive): UseHttpMetrics otherwise labels every request with its raw,
+    // unauthenticated method string, so an attacker sending arbitrary (or oddly-cased) methods can
+    // grow the series count without bound.
+    app.UseWhen(
+        context => context.Request.Method is "GET" or "POST" or "HEAD",
+        branch => branch.UseHttpMetrics(options =>
+        {
+            options.InProgress.Registry = appMetrics.Registry;
+            options.InProgress.CustomLabels.Add(new HttpCustomLabel("endpoint", EndpointLabel));
+            options.RequestCount.Registry = appMetrics.Registry;
+            options.RequestCount.CustomLabels.Add(new HttpCustomLabel("endpoint", EndpointLabel));
+            options.RequestDuration.Registry = appMetrics.Registry;
+            options.RequestDuration.CustomLabels.Add(new HttpCustomLabel("endpoint", EndpointLabel));
+        }));
     // Registered after (so it runs closer to the endpoint than) UseSerilogRequestLogging: an
     // exception thrown downstream reaches this middleware FIRST on its way back out and is
     // resolved into a normal 400/503 response here, so Serilog's own try/catch - further out -
@@ -184,6 +223,7 @@ try
     app.MapAuthEndpoints();
     app.MapShowEndpoints();
     app.MapReservationEndpoints();
+    app.MapMetrics(settings => settings.Registry = appMetrics.Registry);
 
     app.Run();
 }

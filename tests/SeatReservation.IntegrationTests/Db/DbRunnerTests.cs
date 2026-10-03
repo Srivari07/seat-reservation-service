@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
+using SeatReservation.Api.Infrastructure.Metrics;
 
 namespace SeatReservation.IntegrationTests.Db;
 
@@ -76,7 +77,8 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
     {
         var x = await InsertCommittedShowAsync();
         var y = await InsertCommittedShowAsync();
-        var runner = CreateRunner();
+        var metrics = new AppMetrics();
+        var runner = CreateRunner(metrics: metrics);
 
         var firstHoldsX = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secondHoldsY = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -107,6 +109,9 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
 
         Assert.Equal(3, firstAttempts + secondAttempts);
         Assert.Equal(2, Math.Max(firstAttempts, secondAttempts));
+        // One deadlock occurred (the extra attempt above the minimum 2), and db_tx_retries_total
+        // records it (05-observability.md: "contention visibility").
+        Assert.Equal(1, metrics.DbTxRetriesTotal.WithLabels("deadlock").Value);
     }
 
     [Fact]
@@ -121,7 +126,8 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
         await LockShowAsync(holder, holderTransaction, showId);
 
         var attempts = 0;
-        var runner = CreateRunner(maxConcurrency: 1, lockWaitTimeoutSeconds: 1);
+        var metrics = new AppMetrics();
+        var runner = CreateRunner(maxConcurrency: 1, lockWaitTimeoutSeconds: 1, metrics: metrics);
 
         // Each attempt writes a marker row BEFORE the blocking lock. A 1205 only rolls back the
         // failing statement, so this proves each attempt's earlier work is discarded too.
@@ -137,6 +143,9 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
         var inner = Assert.IsType<MySqlException>(ex.InnerException);
         Assert.True(MySqlErrors.IsLockWaitTimeout(inner));
         Assert.Equal(0, await CountShowsNamedAsync(marker));
+        // All 4 failed attempts count, including the one that exhausts retries into contention -
+        // each is a real lock-wait event (05-observability.md: "contention visibility").
+        Assert.Equal(4, metrics.DbTxRetriesTotal.WithLabels("lock_wait_timeout").Value);
 
         // The gate slot (size 1) was released on the contention path.
         await runner.ReadAsync(_ => Task.FromResult(0), CancellationToken.None).WaitAsync(TestTimeout);
@@ -217,7 +226,8 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
         var ex = Assert.Throws<InvalidOperationException>(() => new DbRunner(
             fixture.ConnectionString + ";Maximum Pool Size=5",
             new DbGate(6),
-            NullLogger<DbRunner>.Instance));
+            NullLogger<DbRunner>.Instance,
+            new AppMetrics()));
 
         Assert.Contains("DB_MAX_CONCURRENCY", ex.Message);
     }
@@ -298,7 +308,8 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
         var runner = new DbRunner(
             "Server=127.0.0.1;Port=1;Database=seats;User ID=app;Password=x;Connection Timeout=1",
             new DbGate(1),
-            NullLogger<DbRunner>.Instance);
+            NullLogger<DbRunner>.Instance,
+            new AppMetrics());
 
         await Assert.ThrowsAsync<DbUnavailableException>(
             () => runner.ReadAsync(_ => Task.FromResult(0), CancellationToken.None).WaitAsync(TestTimeout));
@@ -308,8 +319,8 @@ public sealed class DbRunnerTests(MigratedMySqlFixture fixture) : IClassFixture<
             () => runner.ReadAsync(_ => Task.FromResult(0), CancellationToken.None).WaitAsync(TestTimeout));
     }
 
-    private DbRunner CreateRunner(int maxConcurrency = 10, int lockWaitTimeoutSeconds = 5) =>
-        new(fixture.ConnectionString, new DbGate(maxConcurrency), NullLogger<DbRunner>.Instance, lockWaitTimeoutSeconds);
+    private DbRunner CreateRunner(int maxConcurrency = 10, int lockWaitTimeoutSeconds = 5, AppMetrics? metrics = null) =>
+        new(fixture.ConnectionString, new DbGate(maxConcurrency), NullLogger<DbRunner>.Instance, metrics ?? new AppMetrics(), lockWaitTimeoutSeconds);
 
     private async Task<MySqlConnection> OpenRawAsync()
     {
