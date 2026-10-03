@@ -22,3 +22,15 @@ public abstract record ReserveOutcome
     public sealed record Declined(
         int StatusCode, string Reason, string Message, IReadOnlyDictionary<string, object?>? Extra = null) : ReserveOutcome;
 }
+
+// What CancelService decided. Cancelled and AlreadyCancelled are both a 200 with the same body;
+// they differ only in the decision log (and, from Phase 7, the cancelled counter).
+public abstract record CancelOutcome
+{
+    public sealed record Cancelled(ReservationResponse Reservation) : CancelOutcome;
+
+    public sealed record AlreadyCancelled(ReservationResponse Reservation) : CancelOutcome;
+
+    public sealed record Declined(
+        int StatusCode, string Reason, string Message, IReadOnlyDictionary<string, object?>? Extra = null) : CancelOutcome;
+}

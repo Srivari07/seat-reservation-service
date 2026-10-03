@@ -64,6 +64,7 @@ try
     // No scoped dependencies (DbRunner and ShowMetadataCache are both singletons already).
     builder.Services.AddSingleton<ShowService>();
     builder.Services.AddSingleton<ReservationService>();
+    builder.Services.AddSingleton<CancelService>();
 
     builder.Services.AddExceptionHandler<ApiExceptionHandler>();
     builder.Services.AddProblemDetails();

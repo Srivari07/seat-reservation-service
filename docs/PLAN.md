@@ -62,9 +62,17 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 6 — Cancel
 **KB:** 04-concurrency (cancel section)
-- [ ] `POST /reservations/{id}/cancel`, with the same lock order, the `reservation_id` guard, quota decrement and idempotent cancel.
-- [ ] Tests: owner only (404 for others); cancel then rebook by another user gives 201; double cancel gives 200; cancel racing with reserve on the same seats produces no deadlock 500s.
-- [ ] Run the **correctness-reviewer** subagent.
+- [x] `POST /reservations/{id}/cancel`, with the same lock order, the `reservation_id` guard, quota decrement and idempotent cancel. Built as `Reservations/CancelService` (one `DbRunner.WriteAsync` transaction: reservation row `FOR UPDATE` with the owner check in the `WHERE` → guarded quota decrement → seats locked by `seat_no` → guarded seat release → status update). Any rows-affected mismatch rolls back with `invariant_violation` → 409 `contention` (D-17). The quota guard (`seat_count >= n`) was added to 04-concurrency.md.
+- [x] Tests: `Reservations/CancelTests` (12, including both invariant-violation rollbacks and a late cancel after a rebook) and `Reservations/CancelConcurrencyTests` (5, strict and start-gated, asserting lock waits, no 5xx, no contention, I3 and DB truth; the cancel-vs-reserve races also assert that the InnoDB deadlock count did not rise):
+  - owner only (404 for others)
+  - cancel then rebook by another user gives 201
+  - double cancel gives 200
+  - cancel racing with reserve on the same seats produces no deadlock 500s
+  - a hot seat rebooked during a cancel
+  - the per-user limit binding during a cancel
+  - a deterministic I10 check (`Cancel_TakesLocksInGlobalOrder`): while cancel waits on a blocked seat, `performance_schema.data_locks` shows it holds exactly the reservation row and the quota row, and is waiting on the first seat by `seat_no`. Mutations that lock via `reservation_id` or take seats before the quota both fail it every time.
+- [x] Run the **correctness-reviewer** subagent. No CRITICAL/HIGH/MEDIUM. Fixed: the contention log fields, the logged-id cap, the 03-api-contract 409 wording and three test-strength items. A second review found no FAILs and four LOWs. Applied: the lock-order test above, the late-cancel test, and the 503 wording in 03-api-contract (cancel and reserve). Left as a separate `fix:` commit: validating `sub` at token validation (L1/LOW-1).
+  - **Accept:** full suite 110/110 green, 5× in a row; `docker compose up --build` curl smoke test matches `03-api-contract.md`. Both verified.
   - **Commit:** `feat: owner-only cancel that safely releases seats`
 
 ## Phase 7 — Metrics

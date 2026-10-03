@@ -83,15 +83,18 @@ If the current holder of A12 rolls back (e.g. its other requested seat was taken
 ```sql
 SET SESSION innodb_lock_wait_timeout = 5;
 
--- Step 1. Lock the reservation row (first in lock order).
-SELECT reservation_id, show_id, user_id, seats, status
-  FROM reservations WHERE reservation_id = @rid FOR UPDATE;
---   not found OR user_id <> @user → ROLLBACK; 404 reservation_not_found (I6)
+-- Step 1. Lock the reservation row (first in lock order). The owner check is in the WHERE, so
+--         another user's reservation and a missing one are the same zero-row result.
+SELECT reservation_id, show_id, user_id, seats, amount_paise, status
+  FROM reservations WHERE reservation_id = @rid AND user_id = @user FOR UPDATE;
+--   no row → ROLLBACK; 404 reservation_not_found (I6)
 --   status = 'cancelled' → ROLLBACK; 200 with the existing body (idempotent cancel)
 
--- Step 2. Quota.
+-- Step 2. Quota. The seat_count guard turns a missing or short row into a rollback instead of
+--         a silent commit or a ck_quota_nonneg violation (a 500).
 UPDATE user_show_quota SET seat_count = seat_count - @n
- WHERE user_id = @user AND show_id = @show;
+ WHERE user_id = @user AND show_id = @show AND seat_count >= @n;
+--   affected must == 1; otherwise ROLLBACK, log level=Error "invariant_violation", 409 contention
 
 -- Step 3. Lock seats in the SAME index order as reserve. Do NOT update via reservation_id directly:
 --         that walks ix_seats_reservation and locks in seat_id order → deadlock risk with reserve.

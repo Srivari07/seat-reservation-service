@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using MySqlConnector;
 using Testcontainers.MySql;
 
 namespace SeatReservation.IntegrationTests.Shows;
@@ -22,14 +23,23 @@ public sealed class ShowsApiFactory : WebApplicationFactory<Program>, IAsyncLife
     // through the API.
     public string DirectConnectionString => _mysql.GetConnectionString();
 
+    // Root access for tests that read server-wide InnoDB counters (information_schema.INNODB_METRICS
+    // needs the PROCESS privilege, which the app's user doesn't have). Never handed to the app.
+    public string RootConnectionString =>
+        new MySqlConnectionStringBuilder(_mysql.GetConnectionString()) { UserID = "root", Password = RootPassword }.ConnectionString;
+
     // For tests that exercise the db_unavailable path. Each test class gets its own factory
     // instance (IClassFixture), so stopping this container only ever affects that one class.
     public Task StopDatabaseAsync() => _mysql.StopAsync();
 
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(30);
 
+    // Set explicitly rather than relying on whatever Testcontainers derives it from.
+    private const string RootPassword = "test-root-password";
+
     private readonly MySqlContainer _mysql = new MySqlBuilder("mysql:8.4")
         .WithDatabase("seats")
+        .WithEnvironment("MYSQL_ROOT_PASSWORD", RootPassword)
         .Build();
 
     async Task IAsyncLifetime.InitializeAsync()

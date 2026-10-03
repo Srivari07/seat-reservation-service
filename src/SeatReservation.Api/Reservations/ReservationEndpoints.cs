@@ -43,5 +43,32 @@ public static class ReservationEndpoints
                     throw new InvalidOperationException($"Unhandled reserve outcome {outcome.GetType().Name}.");
             }
         }).RequireAuthorization();
+
+        // {id} as string for the same reason: a malformed id is 404 reservation_not_found.
+        app.MapPost("/reservations/{id}/cancel", async (
+            string id,
+            HttpContext context,
+            ICurrentUser currentUser,
+            CancelService service,
+            MigrationsState migrationsState,
+            CancellationToken cancellationToken) =>
+        {
+            if (!migrationsState.IsCompleted)
+            {
+                return ApiError.Write(context, StatusCodes.Status503ServiceUnavailable, "db_unavailable", "The service is not ready yet.");
+            }
+
+            // Only the token's user can cancel (I6).
+            var outcome = await service.CancelAsync(id, currentUser.UserId, cancellationToken);
+
+            return outcome switch
+            {
+                CancelOutcome.Cancelled cancelled => Results.Json(cancelled.Reservation),
+                CancelOutcome.AlreadyCancelled already => Results.Json(already.Reservation),
+                CancelOutcome.Declined { Extra: null } declined => ApiError.Write(context, declined.StatusCode, declined.Reason, declined.Message),
+                CancelOutcome.Declined declined => ApiError.Write(context, declined.StatusCode, declined.Reason, declined.Message, declined.Extra),
+                _ => throw new InvalidOperationException($"Unhandled cancel outcome {outcome.GetType().Name}."),
+            };
+        }).RequireAuthorization();
     }
 }

@@ -95,7 +95,7 @@ A replay also sets the header `Idempotent-Replayed: true`. If the original reser
 | 409 | `per_user_limit` | Would exceed the limit. Extra fields: `"limit": 4, "current": 3` |
 | 409 | `idempotency_mismatch` | Same key, different show/seats |
 | 409 | `contention` | Retries exhausted (D-12). Extra field: `"retryable": true` |
-| 503 | `db_unavailable` | MySQL unreachable (fail closed) |
+| 503 | `db_unavailable` | Migrations haven't finished yet (same gate as `/health/ready`), or MySQL is unreachable (fail closed) |
 
 **Check precedence** (first failing check wins, D-17). Order follows the transaction steps in `04-concurrency.md`:
 1. 400 `invalid_request` (body, seats, key format)
@@ -121,8 +121,8 @@ So a user already at their limit who asks for an unknown or taken seat gets `per
 |---|---|---|
 | 401 | `unauthorized` | Missing or invalid token |
 | 404 | `reservation_not_found` | Doesn't exist, malformed id, **or belongs to another user** (don't reveal existence) |
-| 409 | `contention` | Retries exhausted |
-| 503 | `db_unavailable` | MySQL unreachable |
+| 409 | `contention` | Retries exhausted, or an internal consistency check failed and the cancel was rolled back (D-17). Extra field: `"retryable": true` |
+| 503 | `db_unavailable` | Migrations haven't finished yet (same gate as `/health/ready`), or MySQL is unreachable |
 
 ---
 
