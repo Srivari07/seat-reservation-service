@@ -83,10 +83,10 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 8 — Burst tool
 **KB:** 06-testing-and-burst
-- [ ] `tools/Burst` console app implementing scenarios A–H, the output table and the exit code.
-- [ ] `burst.sh` (dotnet, or a docker fallback).
-- [ ] Run against `docker compose` locally. Fix anything it finds.
-  - **Accept:** `./burst.sh http://localhost:8080` prints `RESULT: PASS` with `5xx = 0`.
+- [x] `tools/Burst` console app implementing scenarios A–H, the output table and the exit code.
+- [x] `burst.sh` (dotnet, or a docker fallback).
+- [x] Run against `docker compose` locally. Fix anything it finds.
+  - **Accept:** `./burst.sh http://localhost:8080` prints `RESULT: PASS` with `5xx = 0`. Verified: a fast smoke run (100 seats) and the full default run (~1000 seats, ~15k requests) both pass against local `docker compose`, 5xx and transport errors both 0.
   - **Commit:** `feat: one-command burst script with reconciliation report`
 
 ## Phase 9 — Deploy
