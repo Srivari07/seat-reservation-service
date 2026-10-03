@@ -32,9 +32,10 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 3 — Auth
 **KB:** 01-decisions (D-10), 03-api-contract
-- [ ] JWT bearer validation (HS256 with `JWT_SIGNING_KEY`). `ICurrentUser` reads `sub` and `role`. Add an admin policy.
-- [ ] `POST /auth/token` (user tokens for anyone; admin requires `ADMIN_SECRET`).
-- [ ] Tests: no token → 401; user token on an admin route → 403; wrong admin secret → 403.
+- [x] JWT bearer validation (HS256 with `JWT_SIGNING_KEY`). `ICurrentUser` reads `sub` and `role`. Add an admin policy.
+- [x] `POST /auth/token` (user tokens for anyone; admin requires `ADMIN_SECRET`).
+- [x] Tests: no token → 401; user token on an admin route → 403; wrong admin secret → 403.
+  - **Accept:** `dotnet test` 18/18 green (10 new auth tests, via the repo's first `WebApplicationFactory<Program>` fixture against a real Testcontainers MySQL). `docker compose up --build` → `/health/ready` 200, and a live curl smoke test of `/auth/token` matches `03-api-contract.md` exactly. Both verified.
   - **Commit:** `feat: jwt auth with dev token issuer`
 
 ## Phase 4 — Shows
