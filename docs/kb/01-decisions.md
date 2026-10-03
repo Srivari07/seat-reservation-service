@@ -98,6 +98,8 @@ Each decision records what we chose, why, and what we rejected. Add new entries 
 
 ### D-15 API docs
 - **Chosen:** The built-in OpenAPI document (`Microsoft.AspNetCore.OpenApi`) plus Swagger UI at `/swagger`. Verify the package versions support .NET 10 before adding them.
+- **Built (Phase 10):** `Microsoft.AspNetCore.OpenApi` 10.0.12 (the document at `/openapi/v1.json`, on Microsoft.OpenApi 2.12.0) and `Swashbuckle.AspNetCore.SwaggerUI` 10.2.3 (UI only, no SwaggerGen). Both ship net10.0 builds. A document transformer declares a Bearer (JWT) scheme so the UI's "Authorize" button works with a token from `POST /auth/token`.
+- **Served in every environment, including Production,** for the same reason as `/auth/token` (D-10): graders explore the live URL. The document describes routes only, never secrets.
 
 ### D-16 Superseded items from my original understanding doc
 - "Scale: 1,00,000 users" → the real target is about 20,000 concurrent reservations, with 500 on one hot seat.

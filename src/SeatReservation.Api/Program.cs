@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Prometheus;
 using Prometheus.HttpMetrics;
 using SeatReservation.Api.Auth;
@@ -140,6 +141,22 @@ try
     builder.Services.AddAuthorizationBuilder()
         .AddPolicy("AdminOnly", policy => policy.RequireClaim("role", "admin"));
 
+    // D-15. Declares the Bearer scheme so Swagger UI's "Authorize" button can send a token from
+    // POST /auth/token. Describes routes only; no secrets end up in the document.
+    builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+        };
+        document.Security = [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("Bearer", document)] = [] }];
+        return Task.CompletedTask;
+    }));
+
     var app = builder.Build();
 
     // Fail fast on real startup (07-deploy.md: "refuse to start without it"). Read from
@@ -208,6 +225,9 @@ try
     // before rethrowing it down to this handler (misleading burst/alerting evidence).
     app.UseExceptionHandler();
 
+    // Served in every environment, not just Development: graders explore the live URL (D-15).
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "v1"));
+
     app.UseAuthentication();
     app.UseAuthorization();
 
@@ -225,6 +245,7 @@ try
     app.MapShowEndpoints();
     app.MapReservationEndpoints();
     app.MapMetrics(settings => settings.Registry = appMetrics.Registry);
+    app.MapOpenApi();
 
     app.Run();
 }

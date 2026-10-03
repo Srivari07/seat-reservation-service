@@ -158,3 +158,4 @@ So a user already at their limit who asks for an unknown or taken seat gets `per
 | `GET /health/ready` | 200 only if migrations have finished **and** `SELECT 1` succeeds within 2 s; otherwise 503 |
 | `GET /metrics` | Prometheus text format (see `05-observability.md`) |
 | `GET /swagger` | Swagger UI over the OpenAPI document |
+| `GET /openapi/v1.json` | The OpenAPI document (D-15), with a Bearer security scheme |
