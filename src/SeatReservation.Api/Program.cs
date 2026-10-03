@@ -36,6 +36,7 @@ try
     builder.Host.UseSerilog((context, services, loggerConfig) => loggerConfig
         .Enrich.FromLogContext()
         .ReadFrom.Configuration(context.Configuration)
+        .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
         .WriteTo.Console(new CompactJsonFormatter()));
 
     builder.Services.ConfigureHttpJsonOptions(options =>
