@@ -69,7 +69,7 @@ Every error has the same shape: `{"error": "<reason>", "message": "…", "reques
 
 ```bash
 ./burst.sh <BASE_URL> --admin-secret <ADMIN_SECRET>      # or export ADMIN_SECRET first
-./burst.sh http://localhost:8080                         # against local docker compose
+./burst.sh http://localhost:8080 --admin-secret local-dev-admin-secret   # local docker compose
 ```
 
 `burst.sh` runs [tools/Burst](tools/Burst) with `dotnet run` if the .NET 10 SDK is installed, and otherwise inside the `mcr.microsoft.com/dotnet/sdk:10.0` Docker image. It creates a fresh show and runs, in order:
@@ -146,14 +146,17 @@ The one transport error was a client-side connection failure over the public int
 
 ## Run locally
 
-Prerequisites: the [.NET 10 SDK](https://dotnet.microsoft.com/download) (pinned in `global.json`) and Docker.
+Prerequisites: Docker. The [.NET 10 SDK](https://dotnet.microsoft.com/download) (pinned in `global.json`) is only needed for the tests, and for the burst tool if you don't want it to run in Docker.
+
+A clean clone runs with no setup:
 
 ```bash
-cp .env.example .env           # then set JWT_SIGNING_KEY (32+ random bytes, base64) and ADMIN_SECRET
 docker compose up --build      # API on http://localhost:8080, MySQL 8.4 with a healthcheck
 curl -s localhost:8080/health/ready
-./burst.sh http://localhost:8080
+./burst.sh http://localhost:8080 --admin-secret local-dev-admin-secret
 ```
+
+`docker-compose.yml` has **local-only** defaults for `JWT_SIGNING_KEY` and `ADMIN_SECRET` (admin secret `local-dev-admin-secret`). They are public in this repo, so never use them for a shared or deployed instance. To override them, `cp .env.example .env` and uncomment the two lines.
 
 Tests run against a real MySQL in Docker (Testcontainers), including the concurrency tests (500 parallel requests on one seat, parallel same-key retries, and so on):
 

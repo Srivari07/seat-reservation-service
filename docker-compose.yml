@@ -22,13 +22,22 @@ services:
     build: .
     ports:
       - "8080:8080"
+    # Optional, so a clean clone runs with no setup. Values in .env (or the shell)
+    # override the local-only defaults below.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       # Inside the compose network the DB host is the service name, not the
       # "localhost" in .env.example (which targets the port published below
       # for a local, non-containerized `dotnet run`).
       ConnectionStrings__Mysql: Server=mysql;Port=3306;Database=seats;User ID=app;Password=changeme;Maximum Pool Size=50;Connection Timeout=5;SslMode=Preferred;Guid Format=Binary16
+      # LOCAL-ONLY defaults, public in this repo, like the MySQL passwords above.
+      # Never use them for a shared or deployed instance: set real values in the
+      # platform (see README, "Deploy to Railway").
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-F1nBTiaLeh9qCvBLi5EE+/WY4+e42mXlWLcjo497OGw=}
+      ADMIN_SECRET: ${ADMIN_SECRET:-local-dev-admin-secret}
+      DB_MAX_CONCURRENCY: ${DB_MAX_CONCURRENCY:-50}
     depends_on:
       mysql:
         condition: service_healthy

@@ -18,7 +18,7 @@ Goal: a clean clone runs with `docker compose up --build`, and the live URL surv
 - **`api` service:**
   - Built from the Dockerfile; port `8080:8080`.
   - `depends_on: mysql: condition: service_healthy`.
-  - env from `.env` (with `.env.example` committed).
+  - env from an optional `.env` (with `.env.example` committed). `JWT_SIGNING_KEY`, `ADMIN_SECRET` and `DB_MAX_CONCURRENCY` have local-only defaults in the compose file (`${VAR:-default}`), so a clean clone runs with no setup; `.env` or the shell overrides them (D-20).
 
 ## Environment variables
 

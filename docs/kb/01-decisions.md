@@ -139,3 +139,8 @@ Ambiguities found while reviewing the KB against the assignment, and how each wa
   - PlanetScale: MySQL-compatible but built on Vitess (sharded) — exactly what D-05 says to avoid, since I1/I9's correctness argument relies on InnoDB row-locking semantics.
   - Aiven: a real, fine MySQL offering, but a separate provider/region from the app host for no gain over Railway's own plugin.
 - **Open item:** once the MySQL plugin is provisioned, confirm its `max_connections` (`SHOW VARIABLES LIKE 'max_connections'`) and lower `Maximum Pool Size` / `DB_MAX_CONCURRENCY` from the local default of 50 if the free tier caps lower (D-14's pool-below-server-limit requirement).
+
+### D-20 Local-only defaults in docker-compose.yml (Phase 10)
+- **Chosen:** `.env` is optional for `docker compose` (`env_file: required: false`). The compose file gives `JWT_SIGNING_KEY` (a random key generated for this), `ADMIN_SECRET` (`local-dev-admin-secret`) and `DB_MAX_CONCURRENCY` defaults via `${VAR:-default}`, so `.env` or the shell still overrides them. `.env.example` has the two secret lines commented out, because copying its placeholders as-is would fail startup (the placeholder signing key isn't valid base64).
+- **Why:** The assignment says a clean checkout must build and run. Before this change, `docker compose up` on a fresh clone failed: `.env` is gitignored, and the copy-the-example route refused to start.
+- **Trade-off:** The defaults are public, the same as the compose file's MySQL passwords. They are only for a local stack, and the compose file comments say so. Railway doesn't read `docker-compose.yml`; the deployed secrets live only in its dashboard (D-18). This is a deliberate, scoped exception to "secrets only from environment variables", chosen by the owner.
