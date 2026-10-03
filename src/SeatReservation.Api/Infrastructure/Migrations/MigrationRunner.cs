@@ -1,3 +1,4 @@
+using System.Data;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -66,10 +67,16 @@ public sealed class MigrationRunner(ILogger<MigrationRunner> logger)
             command.CommandTimeout = LockCommandTimeoutSeconds;
             await command.ExecuteScalarAsync(CancellationToken.None);
         }
-        catch (MySqlException ex)
+        catch (Exception ex) when (ex is MySqlException || (ex is InvalidOperationException && connection.State != ConnectionState.Open))
         {
             // Not rethrown: it must never mask an exception from the migration itself,
             // and disposing this (non-pooled) connection releases the lock regardless.
+            // InvalidOperationException ("Connection must be Open") happens when the connection
+            // has already gone Broken (e.g. under heavy parallel load) by the time we get here -
+            // letting it escape would fault this BackgroundService and stop the whole host
+            // (BackgroundServiceExceptionBehavior.StopHost), which is worse than a missed RELEASE_LOCK.
+            // The State check keeps the filter narrow: an InvalidOperationException on a
+            // genuinely open connection is a real bug and should still surface loudly.
             logger.LogWarning(ex, "RELEASE_LOCK('schema_migrations') failed; the lock will still be freed when the connection closes.");
         }
     }

@@ -7,7 +7,7 @@
   ```json
   { "error": "<reason>", "message": "human readable", "request_id": "..." }
   ```
-  Some errors add fields; these are listed per endpoint.
+  Some errors add fields; these are listed per endpoint. A malformed request body (invalid JSON, or a field with the wrong JSON type, e.g. `price_paise` as a string) gets this same shape, 400 `invalid_request`, on every endpoint — handled centrally (`Infrastructure/Errors/ApiExceptionHandler`), not per-endpoint. A genuinely unexpected 500 (an unmapped bug, not one of the documented outcomes below) does **not** get this shape; it falls through to ASP.NET's default `application/problem+json` body, though it still carries the `X-Request-Id` header.
 - **Fixed error reasons** (do not add new ones without updating this file):
   `invalid_request`, `unauthorized`, `forbidden`, `show_not_found`, `unknown_seat`, `seat_taken`, `per_user_limit`, `idempotency_mismatch`, `idempotency_key_conflict`, `contention`, `reservation_not_found`, `db_unavailable`.
 
@@ -57,9 +57,10 @@
 
 | Status | Reason | When |
 |---|---|---|
-| 400 | `invalid_request` | Empty name; empty `seats`; more than 10,000 seats; a seat failing `^[A-Z0-9]{1,10}$` after trim+uppercase; duplicate seats after normalization; `price_paise` < 0 or non-integer; `per_user_limit` < 1 |
+| 400 | `invalid_request` | Empty name; name longer than 200 characters; empty `seats`; more than 10,000 seats; a seat failing `^[A-Z0-9]{1,10}$` after trim+uppercase; duplicate seats after normalization; `price_paise` < 0 or non-integer; `per_user_limit` < 1 |
 | 401 | `unauthorized` | Missing or invalid token |
 | 403 | `forbidden` | Token role is not `admin` |
+| 503 | `db_unavailable` | Migrations haven't finished yet (same gate as `/health/ready`), or MySQL is unreachable |
 
 ---
 
@@ -145,6 +146,7 @@ So a user already at their limit who asks for an unknown or taken seat gets `per
 | Status | Reason | When |
 |---|---|---|
 | 404 | `show_not_found` | No show with this id |
+| 503 | `db_unavailable` | Migrations haven't finished yet (same gate as `/health/ready`), or MySQL is unreachable |
 
 ---
 

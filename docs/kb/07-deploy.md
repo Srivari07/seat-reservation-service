@@ -24,7 +24,7 @@ Goal: a clean clone runs with `docker compose up --build`, and the live URL surv
 
 | Var | Example | Notes |
 |---|---|---|
-| `ConnectionStrings__Mysql` | `Server=mysql;Port=3306;Database=seats;User ID=app;Password=…;Maximum Pool Size=50;Connection Timeout=5;SslMode=Preferred` | Hosted DBs usually need `SslMode=Required` |
+| `ConnectionStrings__Mysql` | `Server=mysql;Port=3306;Database=seats;User ID=app;Password=…;Maximum Pool Size=50;Connection Timeout=5;SslMode=Preferred` | Hosted DBs usually need `SslMode=Required`. The app also forces `Guid Format=Binary16` itself (`Infrastructure/Db/MySqlConnectionStrings.cs`), so `show_id`/`reservation_id` round-trip through `BINARY(16)` correctly even if this var omits it — but set it here too for clarity/consistency with docker-compose.yml |
 | `JWT_SIGNING_KEY` | 32+ random bytes, base64 | Required; refuse to start without it |
 | `ADMIN_SECRET` | random string | Needed to mint admin tokens (D-10) |
 | `DB_MAX_CONCURRENCY` | `50` | Equal to or below the pool size (D-14) |

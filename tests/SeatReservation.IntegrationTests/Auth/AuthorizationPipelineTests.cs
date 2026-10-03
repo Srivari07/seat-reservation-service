@@ -5,6 +5,7 @@ using System.Text.Json;
 
 namespace SeatReservation.IntegrationTests.Auth;
 
+[Collection("ApiHost")]
 public sealed class AuthorizationPipelineTests : IClassFixture<AuthApiFactory>
 {
     private readonly HttpClient _client;

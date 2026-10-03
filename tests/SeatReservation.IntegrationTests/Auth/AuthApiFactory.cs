@@ -30,8 +30,19 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
     async Task IAsyncLifetime.DisposeAsync()
     {
-        await _mysql.DisposeAsync();
-        await base.DisposeAsync();
+        try
+        {
+            // Host first: MigrationRunnerHostedService (or any in-flight request) can still be
+            // using the database - stopping the host before the container avoids pulling it out
+            // from under a connection that's still open.
+            await base.DisposeAsync();
+        }
+        finally
+        {
+            // Always disposed, even if host shutdown above throws - an orphaned Testcontainer
+            // is worse than a host-shutdown exception getting masked here.
+            await _mysql.DisposeAsync();
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

@@ -28,7 +28,7 @@ services:
       # Inside the compose network the DB host is the service name, not the
       # "localhost" in .env.example (which targets the port published below
       # for a local, non-containerized `dotnet run`).
-      ConnectionStrings__Mysql: Server=mysql;Port=3306;Database=seats;User ID=app;Password=changeme;Maximum Pool Size=50;Connection Timeout=5;SslMode=Preferred
+      ConnectionStrings__Mysql: Server=mysql;Port=3306;Database=seats;User ID=app;Password=changeme;Maximum Pool Size=50;Connection Timeout=5;SslMode=Preferred;Guid Format=Binary16
     depends_on:
       mysql:
         condition: service_healthy

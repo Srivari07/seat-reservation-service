@@ -40,9 +40,9 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 4 — Shows
 **KB:** 02-schema, 03-api-contract
-- [ ] `POST /shows`: validation and normalization, show + seats inserted in one transaction (batched).
-- [ ] `GET /shows/{id}`: a single query, with counts computed from the same rowset. Add the show metadata cache.
-- [ ] Tests: validation cases; the invariant holds on a fresh show; seats are case-normalized.
+- [x] `POST /shows`: validation and normalization, show + seats inserted in one transaction (batched).
+- [x] `GET /shows/{id}`: a single query, with counts computed from the same rowset. Add the show metadata cache.
+- [x] Tests: validation cases; the invariant holds on a fresh show; seats are case-normalized.
   - **Commit:** `feat: create and get show`
 
 ## Phase 5 — Reserve (the core) ⚠️

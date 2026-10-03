@@ -8,6 +8,7 @@ using SeatReservation.Api.Health;
 using SeatReservation.Api.Infrastructure.Errors;
 using SeatReservation.Api.Infrastructure.Logging;
 using SeatReservation.Api.Infrastructure.Migrations;
+using SeatReservation.Api.Shows;
 using Serilog;
 using Serilog.Formatting.Compact;
 
@@ -47,6 +48,23 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<JwtTokenIssuer>();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<ShowMetadataCache>();
+    // No scoped dependencies (IConfiguration and ShowMetadataCache are both singletons already),
+    // so this is a singleton too - lets it cache its connection string once instead of
+    // rebuilding it (MySqlConnectionStringBuilder parsing) on every request.
+    builder.Services.AddSingleton<ShowService>();
+
+    builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+    builder.Services.AddProblemDetails();
+
+    // Minimal APIs only throw BadHttpRequestException (malformed JSON, wrong field types) when
+    // this is true, and it defaults to IsDevelopment() - without it, ApiExceptionHandler would
+    // never see the exception outside local dev, and the contract-shaped error body would only
+    // work by accident in tests/dev. The error still reaches the client as 400 either way; this
+    // only controls whether it gets a chance to be reshaped into {error,message,request_id}.
+    builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer();
@@ -115,6 +133,13 @@ try
 
     app.UseMiddleware<RequestIdMiddleware>();
     app.UseSerilogRequestLogging();
+    // Registered after (so it runs closer to the endpoint than) UseSerilogRequestLogging: an
+    // exception thrown downstream reaches this middleware FIRST on its way back out and is
+    // resolved into a normal 400/503 response here, so Serilog's own try/catch - further out -
+    // never sees an in-flight exception and just logs the already-correct status code. The
+    // reverse order would have Serilog's middleware catch-log the exception as a false 500
+    // before rethrowing it down to this handler (misleading burst/alerting evidence).
+    app.UseExceptionHandler();
 
     app.UseAuthentication();
     app.UseAuthorization();
@@ -130,6 +155,7 @@ try
     });
 
     app.MapAuthEndpoints();
+    app.MapShowEndpoints();
 
     app.Run();
 }

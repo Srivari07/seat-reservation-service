@@ -4,6 +4,7 @@ using System.Text.Json;
 
 namespace SeatReservation.IntegrationTests.Auth;
 
+[Collection("ApiHost")]
 public sealed class TokenEndpointTests : IClassFixture<AuthApiFactory>
 {
     private readonly HttpClient _client;
