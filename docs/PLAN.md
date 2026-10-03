@@ -15,11 +15,11 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 1 — Skeleton that runs in Docker
 **KB:** 05-observability, 07-deploy
-- [ ] Create the `SeatReservation.Api` minimal API project (net10.0), snake_case JSON, and `PORT` binding.
-- [ ] Serilog JSON logging plus request-id middleware (`X-Request-Id`).
-- [ ] `/health/live`, plus `/health/ready` (`SELECT 1` and the migrations flag), using MySqlConnector.
-- [ ] Dockerfile, `docker-compose.yml` (mysql:8.4 with healthcheck) and `.dockerignore`.
-  - **Accept:** `docker compose up --build` → `/health/ready` 200. Stop MySQL → ready returns 503 while live stays 200.
+- [x] Create the `SeatReservation.Api` minimal API project (net10.0), snake_case JSON, and `PORT` binding.
+- [x] Serilog JSON logging plus request-id middleware (`X-Request-Id`).
+- [x] `/health/live`, plus `/health/ready` (`SELECT 1` and the migrations flag), using MySqlConnector. The migrations flag is a stub (`MigrationsState.IsCompleted = true`) until Phase 2's migration runner wires the real value.
+- [x] Dockerfile, `docker-compose.yml` (mysql:8.4 with healthcheck) and `.dockerignore`.
+  - **Accept:** `docker compose up --build` → `/health/ready` 200. Stop MySQL → ready returns 503 while live stays 200. Both verified.
   - **Commit:** `feat: api skeleton with health checks, structured logging, docker compose`
 
 ## Phase 2 — Schema and migrations
