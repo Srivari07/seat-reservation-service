@@ -70,6 +70,7 @@ Each decision records what we chose, why, and what we rejected. Add new entries 
   - An `admin` token requires `admin_secret` to match the `ADMIN_SECRET` env var.
   - This is documented in README as a deliberate shortcut, replaced by a real IdP in production.
 - **Spoofing.** The request DTOs ignore any `user_id` field.
+- **`sub` validation.** Token validation also requires `sub` to match the user_id format (`Auth/UserIds`, anchored with `\z`, the same rule `/auth/token` applies), otherwise 401 `unauthorized`. A validly signed token with a missing, empty, too-long, non-ASCII or space-padded `sub` would otherwise reach SQL as `user_id`. That gives a 500 from MySQL, or under the `ascii_bin` PAD SPACE collation `"u1 "` matching `"u1"` (I6). Added after Phase 6.
 - **Implementation.** `Microsoft.AspNetCore.Authentication.JwtBearer` + `System.IdentityModel.Tokens.Jwt`, HS256 via `SymmetricSecurityKey`/`SigningCredentials`. `JwtBearerOptions.MapInboundClaims = false` so the `sub`/`role` claim names survive unchanged for `ICurrentUser` and the `AdminOnly` policy.
 
 ### D-11 Data access: MySqlConnector + Dapper, raw SQL

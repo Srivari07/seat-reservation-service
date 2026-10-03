@@ -68,6 +68,7 @@ public sealed class TokenEndpointTests : IClassFixture<AuthApiFactory>
 
     [Theory]
     [InlineData("not an id!", "user")]
+    [InlineData("u-1\n", "user")]
     [InlineData("u-1", "superuser")]
     public async Task RejectsInvalidRequest(string userId, string role)
     {

@@ -103,6 +103,18 @@ try
             };
             options.Events = new JwtBearerEvents
             {
+                // A valid signature isn't enough: "sub" becomes user_id in SQL, so it must be a
+                // well-formed user id (I6, D-10). Failing here makes the request unauthenticated,
+                // which OnChallenge below turns into 401 unauthorized.
+                OnTokenValidated = context =>
+                {
+                    if (!UserIds.IsValid(context.Principal?.FindFirst("sub")?.Value))
+                    {
+                        context.Fail($"The token's sub claim must match {UserIds.FormatDescription}.");
+                    }
+
+                    return Task.CompletedTask;
+                },
                 OnChallenge = context =>
                 {
                     context.HandleResponse();
