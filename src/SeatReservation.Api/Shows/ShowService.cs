@@ -1,10 +1,9 @@
-using System.Text.RegularExpressions;
 using Dapper;
 using SeatReservation.Api.Infrastructure.Db;
 
 namespace SeatReservation.Api.Shows;
 
-public sealed partial class ShowService(DbRunner db, ShowMetadataCache metadataCache)
+public sealed class ShowService(DbRunner db, ShowMetadataCache metadataCache)
 {
     private const int DefaultPerUserLimit = 4;
     private const int MaxNameLength = 200;
@@ -154,10 +153,10 @@ public sealed partial class ShowService(DbRunner db, ShowMetadataCache metadataC
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var rawSeat in request.Seats)
         {
-            var seat = (rawSeat ?? string.Empty).Trim().ToUpperInvariant();
-            if (!SeatPattern().IsMatch(seat))
+            var seat = SeatNumbers.Normalize(rawSeat);
+            if (seat is null)
             {
-                return $"seat '{Truncate(rawSeat)}' must match ^[A-Z0-9]{{1,10}}$ after trim/uppercase.";
+                return $"seat '{Truncate(rawSeat)}' must match {SeatNumbers.FormatDescription}.";
             }
 
             if (!seen.Add(seat))
@@ -192,9 +191,6 @@ public sealed partial class ShowService(DbRunner db, ShowMetadataCache metadataC
         value ??= string.Empty;
         return value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), "…");
     }
-
-    [GeneratedRegex("^[A-Z0-9]{1,10}$")]
-    private static partial Regex SeatPattern();
 
     private sealed class ShowSeatRow
     {

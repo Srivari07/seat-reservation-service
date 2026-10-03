@@ -69,7 +69,7 @@ The step order above fixes which decline wins when several apply (quota before s
 - **Same user firing 10 parallel requests.** They serialize on the `user_show_quota` row. The conditional `UPDATE` admits at most `limit` seats.
 - **Same idempotency key twice concurrently.** The second blocks on the unique index entry:
   - If the first commits, the second gets 1062 and replays.
-  - If the first rolls back (declined), the second executes normally.
+  - If the first rolls back (declined), a single waiter executes normally. With **several** waiters, each one is left holding an S gap lock on `uq_reservations_user_key` while waiting to insert, so they deadlock on each other (1213). DbRunner retries them, but a few can exhaust the retry budget and get 409 `contention` (D-12), never a 5xx. Measured in review: 20 parallel same-key retries of a declined request → about 4–5% `contention`. It only happens for parallel retries of a request that is being declined; burst scenario D must therefore use a seat that is known to be free.
 - **Multi-seat deadlock avoidance.** All transactions lock seats in the same `(show_id, seat_no)` index order, and take the quota row before any seat.
 - **Database backstops.** `ck_seats_owner` and the unique keys make an inconsistent state impossible to commit, even if app code had a bug.
 

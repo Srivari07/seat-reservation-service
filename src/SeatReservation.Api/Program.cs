@@ -9,6 +9,7 @@ using SeatReservation.Api.Infrastructure.Db;
 using SeatReservation.Api.Infrastructure.Errors;
 using SeatReservation.Api.Infrastructure.Logging;
 using SeatReservation.Api.Infrastructure.Migrations;
+using SeatReservation.Api.Reservations;
 using SeatReservation.Api.Shows;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -62,6 +63,7 @@ try
     builder.Services.AddSingleton<ShowMetadataCache>();
     // No scoped dependencies (DbRunner and ShowMetadataCache are both singletons already).
     builder.Services.AddSingleton<ShowService>();
+    builder.Services.AddSingleton<ReservationService>();
 
     builder.Services.AddExceptionHandler<ApiExceptionHandler>();
     builder.Services.AddProblemDetails();
@@ -168,6 +170,7 @@ try
 
     app.MapAuthEndpoints();
     app.MapShowEndpoints();
+    app.MapReservationEndpoints();
 
     app.Run();
 }

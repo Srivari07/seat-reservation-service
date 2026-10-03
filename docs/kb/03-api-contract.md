@@ -66,7 +66,7 @@
 
 ## POST /shows/{id}/reserve — authenticated user
 
-The idempotency key can come from the body field `idempotency_key` or the header `Idempotency-Key`. It must be 1–128 printable ASCII characters (0x21–0x7E); anything else is 400 `invalid_request` (the column is `ascii`, D-17). If both are present and differ, the response is 400 `idempotency_key_conflict`.
+The idempotency key can come from the body field `idempotency_key` or the header `Idempotency-Key`. It must be 1–128 printable ASCII characters (0x21–0x7E); anything else is 400 `invalid_request` (the column is `ascii`, D-17). If both are present and differ, the response is 400 `idempotency_key_conflict`. Sending the `Idempotency-Key` header more than once is 400 `invalid_request`.
 
 A `{id}` that is not a valid GUID returns 404 `show_not_found`, the same as an unknown id (also for `GET /shows/{id}`).
 
@@ -86,7 +86,7 @@ A replay also sets the header `Idempotent-Replayed: true`. If the original reser
 
 | Status | Reason | When / extra fields |
 |---|---|---|
-| 400 | `invalid_request` | Empty or duplicate seats, bad seat format, missing or oversized key |
+| 400 | `invalid_request` | Empty or duplicate seats, bad seat format, missing or oversized key, `Idempotency-Key` header sent more than once |
 | 400 | `idempotency_key_conflict` | Header key and body key differ |
 | 400 | `unknown_seat` | A requested seat doesn't exist in this show. Extra field: `"seats": [...]` |
 | 401 | `unauthorized` | Missing or invalid token |
