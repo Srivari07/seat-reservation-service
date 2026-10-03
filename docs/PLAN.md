@@ -49,14 +49,14 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 **KB:** 04-concurrency, 03-api-contract, 01-decisions (D-04, D-07, D-08, D-09, D-12)
 - [x] DB infrastructure: transaction helper (ReadCommitted plus lock timeout), retry helper (1213/1205), MySQL error → domain outcome mapping, and the `SemaphoreSlim` DB gate. Built as `Infrastructure/Db/DbRunner` (`WriteAsync`/`ReadAsync`) + `DbGate` + `TxResult` + `MySqlErrors`; `ShowService` moved onto it. Proven against real MySQL in `Db/DbRunnerTests` (real deadlock retried, lock-wait exhaustion → 409 `contention` with no leaked work, mid-transaction connection loss → 503, nested-call guard, gate ≤ pool size enforced at startup).
 - [x] Reserve service, implementing the transaction exactly as specified. Idempotency replay/mismatch path. Error bodies with reasons. Built as `Reservations/ReservationService` (one `DbRunner.WriteAsync` transaction: idempotency claim → quota → seats locked in `seat_no` order; replay/mismatch and the `per_user_limit` body read after it), `ReservationEndpoints` (outcome → HTTP only) and a shared `Shows/SeatNumbers` normalizer. Functional tests in `Reservations/ReserveTests` cover every outcome and the check precedence against HTTP and DB truth; the concurrency suite is the next task.
-- [ ] Integration tests:
+- [x] Integration tests (`Reservations/ReserveConcurrencyTests`, 10 tests, start-gated, each asserting no 5xx, I3 reconciliation and DB truth; the strict ones also assert real row-lock contention so they can't pass serially; plus a D-07 hot-seat test where lock holders roll back and a multi-seat quota race):
   - C1 hot seat, 500 parallel requests
   - C4 same key, 20 parallel requests, plus the mismatch case
   - C5 10 parallel requests from one user
   - C6 spoofed body
   - all-or-nothing overlap
   - zero 5xx in all of them
-- [ ] Run the **correctness-reviewer** subagent and fix its findings.
+- [x] Run the **correctness-reviewer** subagent and fix its findings. Closing review: no CRITICAL/HIGH; test findings fixed; 04-concurrency.md gained the new-quota-row deadlock note; amount overflow kept as D-17's accepted risk and the quota-row pre-insert declined (user's decisions).
   - **Accept:** all tests green, repeated 5× in a row (`for i in 1..5; dotnet test`), with no flaky deadlock 500s.
   - **Commit(s):** `feat: db transaction and retry infrastructure`, `feat: reserve seats atomically with idempotency and per-user limit`, `test: concurrency tests for reserve`
 
