@@ -24,10 +24,10 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 2 — Schema and migrations
 **KB:** 02-schema
-- [ ] Embedded-SQL migration runner (`schema_migrations` table, `GET_LOCK`, retry on startup).
-- [ ] `0001_init.sql`, exactly as in `02-schema.md`.
-- [ ] Integration test project with a Testcontainers MySQL fixture. First test: migrations apply twice without error.
-  - **Accept:** a fresh container gets all tables; restarting the app doesn't re-apply migrations.
+- [x] Embedded-SQL migration runner (`schema_migrations` table, `GET_LOCK`, retry on startup).
+- [x] `0001_init.sql`, exactly as in `02-schema.md`.
+- [x] Integration test project with a Testcontainers MySQL fixture. First test: migrations apply twice without error.
+  - **Accept:** a fresh container gets all tables; restarting the app doesn't re-apply migrations. Both verified via `docker compose up --build` (clean volume) and a restart.
   - **Commit:** `feat: mysql schema and startup migration runner`
 
 ## Phase 3 — Auth

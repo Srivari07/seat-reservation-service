@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SeatReservation.Api.Health;
 using SeatReservation.Api.Infrastructure.Logging;
+using SeatReservation.Api.Infrastructure.Migrations;
 using Serilog;
 using Serilog.Formatting.Compact;
 
@@ -32,6 +33,8 @@ try
     });
 
     builder.Services.AddSingleton<MigrationsState>();
+    builder.Services.AddSingleton<MigrationRunner>();
+    builder.Services.AddHostedService<MigrationRunnerHostedService>();
 
     builder.Services.AddHealthChecks()
         .AddCheck("live", () => HealthCheckResult.Healthy(), tags: ["live"])
