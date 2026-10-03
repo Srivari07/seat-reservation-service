@@ -9,9 +9,9 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 0 — Repo bootstrap
 **KB:** AGENTS.md
-- [ ] Fill the existing `.gitignore` (dotnet + .env; local notes are already listed), add `.editorconfig`, fill the existing `README.md` stub, add `.env.example`, `global.json` (sdk 10.0.201, `rollForward: latestFeature`) and the solution file. Check whether SDK 10 creates `.slnx` or `.sln` and use what it creates. The docs are already committed.
-  - **Accept:** `git log` shows the docs commit; `dotnet build` succeeds on the empty solution.
-  - **Commit:** `chore: bootstrap repo with agent instructions and knowledge base`
+- [x] Filled the existing `.gitignore` (dotnet build/IDE/.env entries, on top of the local-note lines), added `.editorconfig`, `.gitattributes` (LF line endings, so `burst.sh` survives a Windows checkout), filled the `README.md` stub, and added `.env.example` and `global.json` (sdk 10.0.201, `rollForward: latestFeature`). Confirmed via Microsoft's docs (not guessed) that `dotnet new sln` defaults to `.slnx` on the .NET 10 SDK, so `SeatReservation.slnx` was created with that. The docs were already committed in an earlier session.
+  - **Accept:** `git log` shows the docs commit; `dotnet build` succeeds on the empty solution. Both verified.
+  - **Commit:** `chore: bootstrap solution file, editorconfig, gitattributes, env template and sdk pin`
 
 ## Phase 1 — Skeleton that runs in Docker
 **KB:** 05-observability, 07-deploy

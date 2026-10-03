@@ -3,3 +3,21 @@ HANDOFF.md
 Seat reservation service 1.drawio.png
 Seat-reservation-service-assignment.txt
 my-understanding.txt
+
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE / OS
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+
+# Test output
+TestResults/
+
+# Environment
+.env
