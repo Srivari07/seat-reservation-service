@@ -33,7 +33,7 @@ Goal: a clean clone runs with `docker compose up --build`, and the live URL surv
 
 ## Startup and cold start
 
-1. Retry connecting to MySQL with backoff, for up to about 60 s. Liveness stays 200 while this happens; readiness returns 503.
+1. Retry connecting to MySQL with backoff (1 s doubling to a 5 s cap, plus jitter), with no overall limit (`MigrationRunnerHostedService`). Liveness stays 200 while this happens; readiness returns 503.
 2. Run migrations under `GET_LOCK('schema_migrations', 60)`.
 3. Set the `MigrationsCompleted` flag. Readiness turns 200 once `SELECT 1` also passes.
 4. Never crash-loop because the DB is slow to wake. Free-tier DBs often sleep.

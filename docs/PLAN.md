@@ -100,8 +100,8 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 **KB:** 00-assignment (Deliverables), 01-decisions, ai-usage-log
 - [x] D-15 OpenAPI + Swagger UI. Found unbuilt while planning this phase. `/openapi/v1.json` (`Microsoft.AspNetCore.OpenApi` 10.0.12) and `/swagger` (`Swashbuckle.AspNetCore.SwaggerUI` 10.2.3), served in Production too, with a Bearer scheme for "Authorize". `Docs/OpenApiTests` checks every API path is in the document and the UI is served.
   - **Commit:** `feat: openapi document and swagger ui`
-- [ ] README: live URL, how to get tokens, curl examples, `./burst.sh` usage plus sample output, metrics and logs links, local run.
-- [ ] WRITEUP.md sections, exactly as the assignment lists them:
+- [x] README: live URL, how to get tokens, curl examples, `./burst.sh` usage plus sample output, metrics and logs links, local run. The curl examples and their outputs were run against local `docker compose`. The log-access link is a `<RECORDING_URL>` placeholder for the owner to fill in.
+- [x] WRITEUP.md sections, exactly as the assignment lists them (the AI-usage section is a heading + TODO, see below):
   - atomic decision (mechanism + deadlock avoidance)
   - idempotency
   - holds & expiry (cancel model; TTL as next step)
