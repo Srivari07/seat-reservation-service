@@ -91,7 +91,7 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
 
 ## Phase 9 — Deploy
 **KB:** 07-deploy
-- [ ] Pick the host and MySQL provider. Record the choice as D-18. Set env vars and the health check path.
+- [x] Pick the host and MySQL provider. Record the choice as D-18. Set env vars and the health check path.
 - [ ] Deploy, run the cold-start test, then `./burst.sh <LIVE_URL>`. Save the output.
 - [ ] Set up log access (public view or screen recording).
   - **Commit:** `chore: deployment config for <platform>` (plus any fixes as separate `fix:` commits)

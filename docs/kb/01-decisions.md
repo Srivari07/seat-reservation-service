@@ -123,3 +123,17 @@ Ambiguities found while reviewing the KB against the assignment, and how each wa
 - **Scope of the exception:** `decimal` never reaches storage, persistence, or arithmetic. `Validate` converts it to `long` immediately after checking it's non-negative and integral; the `shows.price_paise` column, `ShowResponse.PricePaise`, and every other money field stay `long`/`BIGINT`, per I7.
 - **Why this doesn't need a `JsonElement`-based parser instead:** the global `ApiExceptionHandler` (added in the same phase) already maps a genuinely non-numeric value (e.g. `"abc"`) to 400 `invalid_request` via `BadHttpRequestException`, so `decimal` isn't covering for a parsing gap — it only exists to let a fractional *number* reach domain validation instead of bombing out at the framework level.
 - **Verified in both environments:** minimal APIs only throw `BadHttpRequestException` (letting `ApiExceptionHandler` see it) when `RouteHandlerOptions.ThrowOnBadRequest` is true, which defaults to `IsDevelopment()` only — `Program.cs` sets it explicitly (`Configure<RouteHandlerOptions>`) so this holds in Production too, not just under `dotnet test`/`WebApplicationFactory`'s Development default. `ShowsApiFactory` forces `UseEnvironment("Production")` specifically so the test suite would catch a regression here.
+
+### D-18 Hosting: Railway (app + MySQL plugin) (Phase 9)
+- **Chosen:** Railway for the app host (Docker image built from the repo's `Dockerfile`, picked up via `railway.json`), and Railway's own MySQL plugin in the same project for the database.
+- **Why:**
+  - Real MySQL/InnoDB, not a distributed-compatible engine, satisfying the `07-deploy.md` checklist and the D-05 caveat.
+  - Same project means app and DB share a region by construction — no separate region-matching step, and latency inside a lock-holding transaction stays low.
+  - Railway injects a `PORT` env var, which `Program.cs` already binds to (`builder.WebHost.UseUrls` when `PORT` is set).
+  - Config-as-code (`railway.json`) lets the health check path (`/health/ready`) and Dockerfile build live in the repo instead of a manual dashboard click.
+- **Rejected:**
+  - Render: Docker hosting is fine, but its managed DB offering is Postgres only — would still need a second provider for MySQL, with no benefit over Railway doing both.
+  - Fly.io: good Docker hosting, no managed MySQL at all.
+  - PlanetScale: MySQL-compatible but built on Vitess (sharded) — exactly what D-05 says to avoid, since I1/I9's correctness argument relies on InnoDB row-locking semantics.
+  - Aiven: a real, fine MySQL offering, but a separate provider/region from the app host for no gain over Railway's own plugin.
+- **Open item:** once the MySQL plugin is provisioned, confirm its `max_connections` (`SHOW VARIABLES LIKE 'max_connections'`) and lower `Maximum Pool Size` / `DB_MAX_CONCURRENCY` from the local default of 50 if the free tier caps lower (D-14's pool-below-server-limit requirement).
