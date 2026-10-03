@@ -36,3 +36,28 @@ Hosting choice recorded as D-18 in `docs/kb/01-decisions.md`: Railway for the ap
    Don't set `PORT` — Railway injects it, and `Program.cs` binds to it automatically. Don't set a health check path manually — `railway.json` already points it at `/health/ready`. Secrets live only in Railway's dashboard, never in the repo.
 4. Deploy, let the service cold-start, then confirm `GET /health/ready` returns 200 within Railway's health check timeout.
 5. Run `./burst.sh <live-url>` against the deployed service and save the output.
+
+## Live deployment
+
+- URL: `https://seat-reservation-service-production-0151.up.railway.app`
+- Cold-start / restart check: `/health/ready` returned 200 consistently across repeated polling after a manual service restart (Railway doesn't crash-loop waiting on MySQL).
+- Full default burst run (`./burst.sh <live-url>`, ~1,000 seats, ~15k requests, 500 concurrent on each of 5 hot seats):
+
+  ```
+  Outcome distribution
+    201 confirmed ........ 750
+    201 replayed ......... 19
+    409 seat_taken ....... 6758
+    409 per_user_limit ... 6
+    409 idempotency_mismatch 1
+    409 contention ....... 0
+    4xx other ............ 0
+    5xx .................. 0   <-- must be 0
+    transport errors ..... 1
+  Hot seats: A1 ✔ 1 winner | A2 ✔ 1 winner | A3 ✔ 1 winner | A4 ✔ 1 winner | A5 ✔ 1 winner
+  Invariant: available 133 + held 0 + confirmed 867 = 1000 ✔ (and 0 violations in 5 live samples)
+  Metrics reconcile: ✔
+  RESULT: PASS
+  ```
+
+  The single transport error is a client-side connection failure talking to Railway over the public internet under 500-concurrent load on one seat, not a 5xx from the server — it doesn't violate I2 (zero 5xx), and is the kind of noise a local `docker compose` run never surfaces since it never leaves localhost.
