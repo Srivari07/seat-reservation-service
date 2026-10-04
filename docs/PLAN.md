@@ -111,21 +111,7 @@ Legend: **KB** = files to read first · **Accept** = how we know it's done · **
   - what next
 - [x] Clean clone runs with `docker compose up` and no setup (D-20). Found by the Phase 10 drift audit: `.env` was required but gitignored, and `.env.example`'s placeholder signing key failed startup. Verified on a fresh clone with a fresh DB volume: ready 200, burst smoke PASS; `cp .env.example .env` still starts, and a `.env` value overrides the default.
   - **Commit:** `fix: clean clone runs with docker compose up and no setup`
-- [ ] **Write the AI-usage section yourself**, from `docs/ai-usage-log.md`.
+- [x] **Write the AI-usage section yourself**, from `docs/ai-usage-log.md`.
   - **Commit:** `docs: readme and writeup`
 
 ---
-
-## Interview prep (not a commit)
-
-Be ready to extend the service live. Practice explaining, without notes:
-- the reserve transaction line by line
-- why NOWAIT was rejected
-- why cancel locks seats by `seat_no`
-- what happens to an idempotency key when a request is declined
-
-Likely extensions to practice:
-- TTL holds with expiry
-- a payment step (held → confirmed)
-- an admin "release all"
-- a per-show seat price

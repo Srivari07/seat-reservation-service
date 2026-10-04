@@ -19,5 +19,7 @@ out/
 # Test output
 TestResults/
 
-# Environment
+# Environment (.env.example is the one exception, committed deliberately)
 .env
+.env.*
+!.env.example

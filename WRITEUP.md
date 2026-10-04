@@ -101,7 +101,26 @@ To diagnose, every log line carries a `request_id`. It's also in the `X-Request-
 
 ## 6. AI usage (directed vs decided)
 
-TODO: to be written by the author from [docs/ai-usage-log.md](docs/ai-usage-log.md).
+I used Claude Code for most of the typing, and Claude subagents as reviewers. I kept the decisions. Every task has a row in [docs/ai-usage-log.md](docs/ai-usage-log.md): what I asked, what the AI produced, what it wasn't sure about, and what I decided.
+
+**How I set it up.** I started from my own HLD/LLD and a written "my understanding" doc. I had Claude review them against the assignment. It flagged that a payment gateway and API gateway were out of scope, that money in `decimal` was wrong, that idempotency keys had to be scoped per user, and that multi-seat locking needed a fixed order. I chose MySQL, explicit cancel and all-or-nothing. Before any code, the design was written down as a knowledge base: invariants I1–I10 in [AGENTS.md](AGENTS.md), plus an ADR log, schema, API contract and concurrency design in [docs/kb/](docs/kb). Then the work went one phase at a time: plan mode → I approve → it implements and runs the tests → I commit only when I say so. Two project subagents guarded the work. `correctness-reviewer` checks any SQL, transaction or locking change against the invariants. `scope-guard` blocks anything the assignment doesn't need.
+
+**What I directed the AI to do.** Write the code and tests for each phase from the KB, run the correctness reviews, build the burst tool and the deploy config, and draft the README and this WRITEUP, including a first draft of this section, which I then edited.
+
+**What I decided.**
+- **The design calls:** MySQL/InnoDB, explicit cancel instead of TTL holds, all-or-nothing, CP under a partition, and Railway for hosting.
+- **The 13 ambiguities found before Phase 0 (D-17):** among them, replay stays 201 with a header, the idempotency key format, and the order checks run in.
+- **Risks I accepted instead of adding code:** `price × seats` overflow, creating the quota row inside the transaction, and a half-applied first migration.
+- **How to prove things:** test-only endpoints to prove 401/403 early, and a deterministic `data_locks` lock-order test instead of a flaky deadlock counter.
+- **Operations:** clear the DB gauges when a refresh fails, rather than freeze them; keep the admin secret out of the repo; make a clean clone run with no setup; build Swagger rather than drop it.
+
+**Where the AI got it wrong, and how that was caught.** Almost always by running against real MySQL or the real deployment, not by reading code:
+- A malformed JWT signing key made *every* request return 500 instead of refusing to start. A manual `docker compose` smoke test found it, not the test suite.
+- `ThrowOnBadRequest` defaults to Development only, so the contract-shaped 400 would have quietly not worked in production. The second review caught it, and the test factory now runs as Production.
+- A reviewer claimed a deadlock counter would catch a lock-order bug. Mutation testing showed it caught the mutant only 2/3 and then 2/6 times, so I replaced it.
+- `$` in the user-id regex let a trailing newline through; it's now `\z`.
+- ASP.NET's own request logs made Railway drop 1,221 log lines in 12 s. My export of the Railway logs is what exposed it.
+- Late in the project, a drift audit against the assignment found that Swagger (D-15) had been "decided" but never built, and that a clean clone couldn't run `docker compose up`. Both were fixed before submission.
 
 ## 7. What I'd do next
 

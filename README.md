@@ -6,7 +6,7 @@ A JSON HTTP service (.NET 10 + MySQL 8 InnoDB) that sells assigned seats for a s
 - **Design write-up:** [WRITEUP.md](WRITEUP.md)
 - **API docs:** [`/swagger`](https://seat-reservation-service-production-0151.up.railway.app/swagger) (OpenAPI document at `/openapi/v1.json`)
 - **Metrics:** [`/metrics`](https://seat-reservation-service-production-0151.up.railway.app/metrics)
-- **Logs:** screen recording of the live logs during a burst: `<RECORDING_URL>`
+- **Logs:** screen recording of the live logs during a burst: [screen recording (Google Drive)](https://drive.google.com/file/d/1SzT2TgUOPyBe75nlKXagZfu7OseqMNCL/view?usp=sharing)
 
 ## Try it against the live URL
 
@@ -142,7 +142,7 @@ The one transport error was a client-side connection failure over the public int
   ```
 
   Tokens, the admin secret and connection strings are never logged.
-- **Log access:** Railway logs are private to the project, so there is a screen recording of the live logs during a burst: `<RECORDING_URL>`.
+- **Log access:** Railway logs are private to the project, so there is a screen recording of the live logs during a burst: [screen recording (Google Drive)](https://drive.google.com/file/d/1SzT2TgUOPyBe75nlKXagZfu7OseqMNCL/view?usp=sharing).
 
 ## Run locally
 
