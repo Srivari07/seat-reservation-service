@@ -8,6 +8,12 @@ A JSON HTTP service (.NET 10 + MySQL 8 InnoDB) that sells assigned seats for a s
 - **Metrics:** [`/metrics`](https://seat-reservation-service-production-0151.up.railway.app/metrics)
 - **Logs:** screen recording of the live logs during a burst: [screen recording (Google Drive)](https://drive.google.com/file/d/1SzT2TgUOPyBe75nlKXagZfu7OseqMNCL/view?usp=sharing)
 
+## Architecture
+
+![High-level architecture: Admin and User actors call into the single Seat Reservation Service process, which routes through its own ASP.NET Core middleware (auth) to the Show and Reservation services, which take the atomic decision in MySQL via row locks and unique constraints.](docs/img/architecture.png)
+
+One deployable, one database — no API gateway and no separate microservices (D-01). The box labeled "API Gateway" in the diagram is ASP.NET Core's own middleware pipeline (JWT authentication + the `AdminOnly` authorization policy) running inside that single process, not a separate service. The atomic decision — no double-sell, the per-user limit, idempotency — is taken in MySQL itself, via row locks (`FOR UPDATE`) and unique constraints, never in application code (I9); see [WRITEUP.md §1](WRITEUP.md#1-the-atomic-decision).
+
 ## Try it against the live URL
 
 Tokens come from a dev-grade issuer, `POST /auth/token` (a deliberate shortcut, D-10; a real deployment would use an identity provider). Anyone can mint a **user** token for any `user_id`. An **admin** token, needed to create shows, also needs the `ADMIN_SECRET`. **The live admin secret is sent separately with the submission; it is never in this repo.**
